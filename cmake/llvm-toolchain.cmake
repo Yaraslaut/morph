@@ -1,0 +1,2 @@
+set(CMAKE_C_COMPILER   clang-20   CACHE STRING "")
+set(CMAKE_CXX_COMPILER clang++-20 CACHE STRING "")

@@ -1,0 +1,289 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "base-vcpkg",
+      "hidden": true,
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE":          "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "base-linux",
+      "hidden": true,
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "base-gnu-linux",
+      "hidden": true,
+      "inherits": "base-linux",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/gnu-toolchain.cmake"
+      }
+    },
+    {
+      "name": "base-clang-linux",
+      "hidden": true,
+      "inherits": "base-linux",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/llvm-toolchain.cmake"
+      }
+    },
+    {
+      "name": "base-clang-cl",
+      "hidden": true,
+      "inherits": "base-vcpkg",
+      "cacheVariables": {
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/clang-cl-toolchain.cmake"
+      }
+    },
+
+    {
+      "name": "debug",
+      "displayName": "Debug (MSVC)",
+      "inherits": "base-vcpkg",
+      "binaryDir": "${sourceDir}/build/debug",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "qt-debug",
+      "displayName": "Debug + Qt WebSocket (Windows)",
+      "inherits": "debug",
+      "binaryDir": "${sourceDir}/build/qt-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ASYNC_FRAMEWORK_BUILD_QT": "ON"
+      }
+    },
+    {
+      "name": "qt-release",
+      "displayName": "Release + Qt WebSocket (Windows)",
+      "inherits": "base-vcpkg",
+      "binaryDir": "${sourceDir}/build/qt-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ASYNC_FRAMEWORK_BUILD_QT": "ON",
+        "ASYNC_FRAMEWORK_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release (MSVC)",
+      "inherits": "base-vcpkg",
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "clang-cl-debug",
+      "displayName": "Debug (clang-cl, Windows)",
+      "inherits": "base-clang-cl",
+      "binaryDir": "${sourceDir}/build/clang-cl-debug",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "clang-cl-release",
+      "displayName": "Release (clang-cl, Windows)",
+      "inherits": "base-clang-cl",
+      "binaryDir": "${sourceDir}/build/clang-cl-release",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+
+    {
+      "name": "gcc-debug",
+      "displayName": "Debug (GCC, Linux)",
+      "inherits": "base-gnu-linux",
+      "binaryDir": "${sourceDir}/build/gcc-debug",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "gcc-release",
+      "displayName": "Release (GCC, Linux)",
+      "inherits": "base-gnu-linux",
+      "binaryDir": "${sourceDir}/build/gcc-release",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "clang-debug",
+      "displayName": "Debug (Clang, Linux)",
+      "inherits": "base-clang-linux",
+      "binaryDir": "${sourceDir}/build/clang-debug",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "clang-release",
+      "displayName": "Release (Clang, Linux)",
+      "inherits": "base-clang-linux",
+      "binaryDir": "${sourceDir}/build/clang-release",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+
+    {
+      "name": "asan",
+      "displayName": "ASan + UBSan (Clang, Linux)",
+      "inherits": "base-clang-linux",
+      "binaryDir": "${sourceDir}/build/asan",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "AF_SANITIZER": "asan"
+      }
+    },
+    {
+      "name": "tsan",
+      "displayName": "TSan (Clang, Linux)",
+      "inherits": "base-clang-linux",
+      "binaryDir": "${sourceDir}/build/tsan",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "AF_SANITIZER": "tsan"
+      }
+    },
+    {
+      "name": "ubsan",
+      "displayName": "UBSan standalone (Clang, Linux)",
+      "inherits": "base-clang-linux",
+      "binaryDir": "${sourceDir}/build/ubsan",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "AF_SANITIZER": "ubsan"
+      }
+    },
+    {
+      "name": "msan",
+      "displayName": "MSan (Clang, Linux — requires instrumented libc++)",
+      "inherits": "base-clang-linux",
+      "binaryDir": "${sourceDir}/build/msan",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "AF_SANITIZER": "msan"
+      }
+    },
+    {
+      "name": "coverage",
+      "displayName": "Coverage (Clang source-based, Linux)",
+      "inherits": "base-clang-linux",
+      "binaryDir": "${sourceDir}/build/coverage",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "AF_COVERAGE": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "debug",           "configurePreset": "debug",           "jobs": 0 },
+    { "name": "qt-debug",        "configurePreset": "qt-debug",        "jobs": 0 },
+    { "name": "qt-release",      "configurePreset": "qt-release",      "jobs": 0 },
+    { "name": "release",         "configurePreset": "release",         "jobs": 0 },
+    { "name": "clang-cl-debug",  "configurePreset": "clang-cl-debug",  "jobs": 0 },
+    { "name": "clang-cl-release","configurePreset": "clang-cl-release","jobs": 0 },
+    { "name": "gcc-debug",       "configurePreset": "gcc-debug",       "jobs": 0 },
+    { "name": "gcc-release",     "configurePreset": "gcc-release",     "jobs": 0 },
+    { "name": "clang-debug",     "configurePreset": "clang-debug",     "jobs": 0 },
+    { "name": "clang-release",   "configurePreset": "clang-release",   "jobs": 0 },
+    { "name": "asan",            "configurePreset": "asan",            "jobs": 0 },
+    { "name": "tsan",            "configurePreset": "tsan",            "jobs": 0 },
+    { "name": "ubsan",           "configurePreset": "ubsan",           "jobs": 0 },
+    { "name": "msan",            "configurePreset": "msan",            "jobs": 0 },
+    { "name": "coverage",        "configurePreset": "coverage",        "jobs": 0 }
+  ],
+  "testPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": true }
+    },
+    {
+      "name": "qt-debug",
+      "configurePreset": "qt-debug",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": true }
+    },
+    {
+      "name": "qt-release",
+      "configurePreset": "qt-release",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": true }
+    },
+    {
+      "name": "clang-cl-debug",
+      "configurePreset": "clang-cl-debug",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": true }
+    },
+    {
+      "name": "gcc-debug",
+      "configurePreset": "gcc-debug",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": true }
+    },
+    {
+      "name": "clang-debug",
+      "configurePreset": "clang-debug",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": true }
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": true }
+    },
+    {
+      "name": "tsan",
+      "configurePreset": "tsan",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": true }
+    },
+    {
+      "name": "ubsan",
+      "configurePreset": "ubsan",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": true }
+    },
+    {
+      "name": "msan",
+      "configurePreset": "msan",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": true }
+    },
+    {
+      "name": "coverage",
+      "configurePreset": "coverage",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": true }
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "debug",
+      "displayName": "Configure, build, and test (debug)",
+      "steps": [
+        { "type": "configure", "name": "debug" },
+        { "type": "build",     "name": "debug" },
+        { "type": "test",      "name": "debug" }
+      ]
+    },
+    {
+      "name": "release",
+      "displayName": "Configure and build (release)",
+      "steps": [
+        { "type": "configure", "name": "release" },
+        { "type": "build",     "name": "release" }
+      ]
+    },
+    {
+      "name": "asan",
+      "displayName": "Configure, build, and test (ASan)",
+      "steps": [
+        { "type": "configure", "name": "asan" },
+        { "type": "build",     "name": "asan" },
+        { "type": "test",      "name": "asan" }
+      ]
+    }
+  ]
+}
