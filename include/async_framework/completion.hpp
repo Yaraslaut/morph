@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 #include <exception>
 #include <functional>
@@ -112,33 +114,73 @@ struct CompletionState {
 
 }  // namespace detail
 
+/// @brief Move-only handle representing the eventual result of an asynchronous operation.
+///
+/// Callbacks are posted to the `IExecutor` supplied at construction time, so
+/// they always run on the intended thread (e.g. the GUI thread).
+///
+/// @tparam T Type of the success value.
+///
+/// @par Thread safety
+/// `then()` and `onError()` may be called from any thread. The registered
+/// callbacks are invoked via the executor, never directly from the producing thread.
+///
+/// @par Orphan detection
+/// If a `Completion` is destroyed before an `onError()` handler is attached and
+/// the operation has already failed, the exception is logged as an orphan error.
 template <typename T>
 class Completion {
 public:
+    /// @brief Constructs an empty (no-op) completion.
     Completion() = default;
+
+    /// @brief Constructs a completion backed by @p statePtr, delivering callbacks via @p execPtr.
+    /// @param statePtr Shared state produced by the backend.
+    /// @param execPtr  Executor on which callbacks are posted. May be `nullptr` (direct call).
     Completion(std::shared_ptr<detail::CompletionState<T>> statePtr, IExecutor* execPtr)
         : _state{std::move(statePtr)} {
         if (_state != nullptr) {
             _state->cbExec = execPtr;
         }
     }
+
     Completion(Completion&&) noexcept = default;
     Completion& operator=(Completion&&) noexcept = default;
     Completion(const Completion&) = delete;
     Completion& operator=(const Completion&) = delete;
 
+    /// @brief Registers a success callback.
+    ///
+    /// @p handler is posted to the executor with the result value when the
+    /// operation completes successfully. If the operation has already completed,
+    /// the callback is posted immediately.
+    ///
+    /// @param handler Callable receiving the result by value.
+    /// @return `*this` for chaining.
     Completion& then(std::function<void(T)> handler) {
         if (_state != nullptr) {
             _state->attachThen(std::move(handler));
         }
         return *this;
     }
+
+    /// @brief Registers an error callback.
+    ///
+    /// @p handler is posted to the executor with the `std::exception_ptr` when
+    /// the operation fails. If the operation has already failed, the callback
+    /// is posted immediately. Attaching this handler suppresses orphan logging.
+    ///
+    /// @param handler Callable receiving the exception pointer.
+    /// @return `*this` for chaining.
     Completion& onError(std::function<void(std::exception_ptr)> handler) {
         if (_state != nullptr) {
             _state->attachOnError(std::move(handler));
         }
         return *this;
     }
+
+    /// @brief Returns the underlying shared state (for advanced / internal use).
+    /// @return Shared pointer to the completion state, or `nullptr` for empty completions.
     [[nodiscard]] std::shared_ptr<detail::CompletionState<T>> state() const { return _state; }
 
 private:

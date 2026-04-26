@@ -1,21 +1,30 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
-#include <async_framework/executor.hpp>
 #include <QCoreApplication>
 #include <QMetaObject>
+#include <async_framework/executor.hpp>
 #include <functional>
 
 namespace morph {
 
-// Posts callbacks to the Qt event loop (GUI thread) via QMetaObject::invokeMethod.
-// Thread-safe: can be called from any thread. No QObject subclass needed.
+/// @brief `IExecutor` implementation that posts tasks to the Qt event loop.
+///
+/// Uses `QMetaObject::invokeMethod` with `Qt::QueuedConnection` so the callable
+/// always runs on the thread that owns `QCoreApplication` (typically the GUI thread).
+///
+/// Thread-safe: `post()` may be called from any thread. No `QObject` subclass is
+/// required by the caller.
 class QtExecutor : public IExecutor {
 public:
+    /// @brief Posts @p fn to the Qt event loop for execution on the GUI thread.
+    ///
+    /// Returns immediately. @p fn is invoked asynchronously once the event loop
+    /// processes the queued event.
+    ///
+    /// @param fn Callable to execute on the GUI thread.
     void post(std::function<void()> fn) override {
-        QMetaObject::invokeMethod(
-            QCoreApplication::instance(),
-            std::move(fn),
-            Qt::QueuedConnection
-        );
+        QMetaObject::invokeMethod(QCoreApplication::instance(), std::move(fn), Qt::QueuedConnection);
     }
 };
 

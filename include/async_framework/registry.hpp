@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 #include <functional>
 #include <glaze/glaze.hpp>
@@ -12,12 +14,24 @@
 
 namespace morph {
 
+/// @brief Exception thrown when JSON serialisation or deserialisation fails.
 struct ParseError : std::runtime_error {
     using std::runtime_error::runtime_error;
 };
 
+/// @brief Traits specialisation that maps a model type to its string type-id.
+///
+/// Users must specialise this (or use `BRIDGE_REGISTER_MODEL`) before the model
+/// can be registered with a backend.
+/// @tparam Model Concrete model type.
 template <typename Model>
 struct ModelTraits;
+
+/// @brief Traits specialisation that maps an action type to its id, JSON codec,
+///        and result type.
+///
+/// Users must specialise this (or use `BRIDGE_REGISTER_ACTION`).
+/// @tparam Action Concrete action type.
 template <typename Action>
 struct ActionTraits;
 
@@ -25,10 +39,24 @@ struct ActionTraits;
 inline class ActionDispatcher& defaultDispatcher();
 inline class ModelRegistryFactory& defaultRegistry();
 
+/// @brief Registry that maps (modelId, actionId) pairs to type-erased runner functions.
+///
+/// Used by `RemoteServer` to dispatch incoming JSON requests without knowing the
+/// concrete model or action types at the call site.
 class ActionDispatcher {
 public:
+    /// @brief Type-erased action runner: deserialises, executes, and serialises the result.
     using Runner = std::function<std::string(IModelHolder&, std::string_view)>;
 
+    /// @brief Registers a runner for `(Model, Action)` under the given string ids.
+    ///
+    /// The runner deserialises the JSON payload using `ActionTraits<Action>::fromJson`,
+    /// calls `model.execute(action)`, and returns the JSON-encoded result.
+    ///
+    /// @tparam Model  Concrete model type.
+    /// @tparam Action Concrete action type.
+    /// @param modelId  String type-id of the model (from `ModelTraits<Model>::typeId()`).
+    /// @param actionId String type-id of the action (from `ActionTraits<Action>::typeId()`).
     template <typename Model, typename Action>
     void registerAction(std::string_view modelId, std::string_view actionId) {
         Key key{std::string{modelId}, std::string{actionId}};
@@ -40,6 +68,14 @@ public:
         };
     }
 
+    /// @brief Dispatches an action against @p holder and returns the JSON-encoded result.
+    ///
+    /// @param modelId  String id identifying the model type.
+    /// @param actionId String id identifying the action type.
+    /// @param holder   Model instance to execute against.
+    /// @param payload  JSON-encoded action payload.
+    /// @return JSON-encoded result string.
+    /// @throws std::runtime_error if no runner is registered for `(modelId, actionId)`.
     std::string dispatch(std::string_view modelId, std::string_view actionId, IModelHolder& holder,
                          std::string_view payload) {
         Key key{std::string{modelId}, std::string{actionId}};
@@ -50,6 +86,7 @@ public:
         return iter->second(holder, payload);
     }
 
+    /// @brief Returns the process-level singleton dispatcher.
     static ActionDispatcher& instance() { return defaultDispatcher(); }
 
 private:
@@ -65,12 +102,27 @@ private:
     std::unordered_map<Key, Runner, KeyHash> _runners;
 };
 
+/// @brief Registry that creates `IModelHolder` instances by string type-id.
+///
+/// Used by `RemoteServer` to instantiate models on demand from incoming
+/// `"register"` messages.
 class ModelRegistryFactory {
 public:
+    /// @brief Registers a default-construction factory for `Model` under @p modelId.
+    ///
+    /// Overwrites any previously registered factory for the same id.
+    /// @tparam Model Concrete model type to register.
+    /// @param modelId String id used to look up this factory.
     template <typename Model>
     void registerModel(std::string_view modelId) {
         _factories.insert_or_assign(std::string{modelId}, [] { return ModelFactory::create<Model>(); });
     }
+
+    /// @brief Creates a new model holder for the type registered under @p modelId.
+    ///
+    /// @param modelId String id of the model type.
+    /// @return Owning pointer to the new holder.
+    /// @throws std::runtime_error if @p modelId has not been registered.
     std::unique_ptr<IModelHolder> create(std::string_view modelId) {
         auto iter = _factories.find(std::string{modelId});
         if (iter == _factories.end()) {
@@ -78,18 +130,25 @@ public:
         }
         return iter->second();
     }
+
+    /// @brief Returns the process-level singleton registry.
     static ModelRegistryFactory& instance() { return defaultRegistry(); }
 
 private:
     std::unordered_map<std::string, std::function<std::unique_ptr<IModelHolder>()>> _factories;
 };
 
-// Process-level default instances — what the BRIDGE_REGISTER_* macros target.
-// Pass these to RemoteServer in production; pass fresh instances in tests.
+/// @brief Returns the process-level `ActionDispatcher` singleton.
+///
+/// Pass a local instance to `RemoteServer` in tests to avoid global state pollution.
 inline ActionDispatcher& defaultDispatcher() {
     static ActionDispatcher inst;
     return inst;
 }
+
+/// @brief Returns the process-level `ModelRegistryFactory` singleton.
+///
+/// Pass a local instance to `RemoteServer` in tests to avoid global state pollution.
 inline ModelRegistryFactory& defaultRegistry() {
     static ModelRegistryFactory inst;
     return inst;
@@ -98,6 +157,14 @@ inline ModelRegistryFactory& defaultRegistry() {
 }  // namespace morph
 
 // NOLINTBEGIN(bugprone-macro-parentheses)
+
+/// @brief Registers model type @p M with the string id @p NAME.
+///
+/// Specialises `morph::ModelTraits<M>` and registers a factory with the
+/// process-level `ModelRegistryFactory` at static-init time.
+///
+/// @param M    Concrete model type.
+/// @param NAME String literal used as the type-id.
 #define BRIDGE_REGISTER_MODEL(M, NAME)                                  \
     template <>                                                         \
     struct morph::ModelTraits<M> {                                      \
@@ -110,6 +177,15 @@ inline ModelRegistryFactory& defaultRegistry() {
     }();                                                                \
     }
 
+/// @brief Registers action type @p A (for model @p M) with the string id @p NAME.
+///
+/// Specialises `morph::ActionTraits<A>` with JSON codec functions and registers
+/// the action with the process-level `ActionDispatcher` at static-init time.
+/// `BRIDGE_REGISTER_MODEL(M, ...)` must be called before this macro.
+///
+/// @param M    Concrete model type that handles the action.
+/// @param A    Concrete action type.
+/// @param NAME String literal used as the action type-id.
 #define BRIDGE_REGISTER_ACTION(M, A, NAME)                                                               \
     template <>                                                                                          \
     struct morph::ActionTraits<A> {                                                                      \

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #include <async_framework/bridge.hpp>
 #include <async_framework/executor.hpp>
 #include <async_framework/registry.hpp>
@@ -209,10 +211,10 @@ TEST_CASE("RemoteServer: Qt 6-part execute returns ok|callId|result", "[remote]"
     std::atomic<bool> replyReceived{false};
     std::string replyMsg;
     server->handle("execute|call-xyz|" + std::to_string(mid) + "|RX_SquareModel|RX_SquareAction|{\"x\":5}",
-                  [&](const std::string& reply) {
-                      replyMsg = reply;
-                      replyReceived.store(true);
-                  });
+                   [&](const std::string& reply) {
+                       replyMsg = reply;
+                       replyReceived.store(true);
+                   });
 
     for (int i = 0; i < 50 && !replyReceived.load(); ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -246,10 +248,10 @@ TEST_CASE("RemoteServer: model action exception becomes err reply", "[remote]") 
     std::atomic<bool> replyReceived{false};
     std::string replyMsg;
     server->handle("execute|" + std::to_string(mid) + "|RX_SquareModel|RX_SquareFail|{}",
-                  [&](const std::string& reply) {
-                      replyMsg = reply;
-                      replyReceived.store(true);
-                  });
+                   [&](const std::string& reply) {
+                       replyMsg = reply;
+                       replyReceived.store(true);
+                   });
 
     for (int i = 0; i < 50 && !replyReceived.load(); ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));

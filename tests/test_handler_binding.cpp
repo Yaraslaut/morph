@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #include <async_framework/backend.hpp>
 #include <async_framework/bridge.hpp>
 #include <async_framework/executor.hpp>
@@ -24,14 +26,10 @@ template <>
 struct morph::ActionTraits<HBAction> {
     using Result = int;
     static constexpr std::string_view typeId() { return "HB_Action"; }
-    static std::string toJson(const HBAction& action) {
-        return R"({"x":)" + std::to_string(action.x) + "}";
-    }
+    static std::string toJson(const HBAction& action) { return R"({"x":)" + std::to_string(action.x) + "}"; }
     static HBAction fromJson(std::string_view) { return {}; }
     static std::string resultToJson(const int& res) { return std::to_string(res); }
-    static int resultFromJson(std::string_view json) {
-        return std::stoi(std::string{json});
-    }
+    static int resultFromJson(std::string_view json) { return std::stoi(std::string{json}); }
 };
 
 struct SyncExec : IExecutor {
@@ -53,9 +51,8 @@ TEST_CASE("HandlerBinding: RAII  -  model deregistered when BridgeHandler destro
     std::atomic<int> result{-1};
     {
         BridgeHandler<HBModel> handler{bridge, &cbExec};
-        handler.execute(HBAction{10})
-            .then([&](int val) { result.store(val); })
-            .onError([](const std::exception_ptr&) {});
+        handler.execute(HBAction{10}).then([&](int val) { result.store(val); }).onError([](const std::exception_ptr&) {
+        });
 
         for (int i = 0; i < 50 && result.load() == -1; ++i) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -133,9 +130,7 @@ TEST_CASE("HandlerBinding: Bridge holds weak_ptr  -  destroyed handler does not 
     // Registering a fresh handler and using it must still work.
     std::atomic<int> result{-1};
     BridgeHandler<HBModel> live{bridge, &cbExec};
-    live.execute(HBAction{99})
-        .then([&](int val) { result.store(val); })
-        .onError([](const std::exception_ptr&) {});
+    live.execute(HBAction{99}).then([&](int val) { result.store(val); }).onError([](const std::exception_ptr&) {});
 
     for (int i = 0; i < 50 && result.load() == -1; ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 #include <QEventLoop>
 #include <QSslConfiguration>
@@ -13,30 +15,81 @@
 
 namespace morph {
 
+/// @brief `IBackend` implementation that communicates with a `RemoteServer` over WebSocket.
+///
+/// All `registerModel()` and `deregisterModel()` calls are synchronous (block the
+/// calling thread via a nested `QEventLoop` until the server replies). `execute()`
+/// is asynchronous: it assigns a call-id, sends the message, and resolves the
+/// returned `Completion` when the matching reply arrives.
+///
+/// @par TLS
+/// Pass a `QSslConfiguration` to enable `wss://`. For self-signed certificates
+/// set `QSslSocket::VerifyNone` on the configuration before passing it in.
+///
+/// @par Threading
+/// Must be used from the Qt event loop thread. `execute()` and the internal
+/// message handler are both called on that thread.
 class QtWebSocketBackend : public IBackend {
 public:
-    // tls == nullopt  →  ws://  (plain)
-    // tls has value   →  wss:// (TLS); applied to QWebSocket before open().
-    //                    For self-signed certs: set VerifyNone in the config.
+    /// @brief Constructs the backend and opens a WebSocket connection to @p serverUrl.
+    ///
+    /// @param serverUrl   `ws://` or `wss://` URL of the remote `RemoteServer`.
+    /// @param dispatcher  Action dispatcher (defaults to the process-level singleton).
+    /// @param registry    Model registry (defaults to the process-level singleton).
+    /// @param tls         If non-null, enables TLS and applies this configuration.
     explicit QtWebSocketBackend(QUrl serverUrl, ActionDispatcher& dispatcher = defaultDispatcher(),
                                 ModelRegistryFactory& registry = defaultRegistry(),
                                 std::optional<QSslConfiguration> tls = std::nullopt);
+
+    /// @brief Closes the socket and cleans up pending operations.
     ~QtWebSocketBackend() override;
 
-    // Pumps event loop until connected or timeoutMs elapses. Returns false on timeout.
+    /// @brief Pumps the Qt event loop until the socket is connected or @p timeoutMs elapses.
+    ///
+    /// Must be called on the Qt event loop thread after construction.
+    ///
+    /// @param timeoutMs Maximum time to wait in milliseconds.
+    /// @return `true` if connected before the timeout, `false` otherwise.
     bool waitForConnected(int timeoutMs = 5000);
 
+    /// @brief Sends a `register` message to the server and blocks until the reply arrives.
+    ///
+    /// @param typeId  String type-id of the model to register.
+    /// @param factory Ignored — model construction is delegated to the server.
+    /// @return `ModelId` assigned by the server.
+    /// @throws std::runtime_error if the server replies with an error or the socket is not connected.
     ModelId registerModel(const std::string& typeId, std::function<std::unique_ptr<IModelHolder>()> factory) override;
+
+    /// @brief Sends a `deregister` message and blocks until the server acknowledges.
+    ///
+    /// @param mid Id of the model to remove on the server.
     void deregisterModel(ModelId mid) override;
+
+    /// @brief Sends an `execute` message and returns a `Completion` that resolves on reply.
+    ///
+    /// Assigns a monotonically increasing call-id so that concurrent calls can be
+    /// matched to their replies. The `Completion` callbacks are posted via @p cbExec.
+    ///
+    /// @param mid    Target model id on the server.
+    /// @param call   Bundled action; `serializeAction` and `deserializeResult` are used.
+    /// @param cbExec Executor for delivering the completion callbacks.
+    /// @return Completion resolved asynchronously when the server reply arrives.
     Completion<std::shared_ptr<void>> execute(ModelId mid, ActionCall call, IExecutor* cbExec) override;
-    // Remote backend holds no live model objects — no-op per IBackend contract.
+
+    /// @brief No-op — this backend holds no local model objects.
     void notifyBackendChanged() override {}
 
 private:
-    // Sends msg and blocks (via nested QEventLoop) until a reply arrives.
-    // Only used for register/deregister. Must be called on the Qt event loop thread.
+    /// @brief Sends @p msg synchronously by blocking the Qt thread via a nested event loop.
+    ///
+    /// Used only for `register` and `deregister`. Must be called on the Qt event loop thread.
+    ///
+    /// @param msg Protocol message to send.
+    /// @return Reply string received from the server.
     std::string sendSync(const std::string& msg);
 
+    /// @brief Slot called by `QWebSocket` when a text frame arrives.
+    /// @param message Raw text received from the server.
     void onTextMessage(const QString& message);
 
     QWebSocket _socket;

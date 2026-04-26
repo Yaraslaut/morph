@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #include <async_framework/model.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <memory>
@@ -164,8 +166,10 @@ TEST_CASE("Bridge::switchBackend  -  multiple live handlers all re-registered", 
 
     std::atomic<int> res1{-1};
     std::atomic<int> res2{-1};
-    handler1.execute(CountAction{10}).then([&](int val) { res1.store(val); }).onError([](const std::exception_ptr&) {});
-    handler2.execute(CountAction{20}).then([&](int val) { res2.store(val); }).onError([](const std::exception_ptr&) {});
+    handler1.execute(CountAction{10}).then([&](int val) { res1.store(val); }).onError([](const std::exception_ptr&) {
+    });
+    handler2.execute(CountAction{20}).then([&](int val) { res2.store(val); }).onError([](const std::exception_ptr&) {
+    });
     for (int i = 0; i < 50 && (res1.load() == -1 || res2.load() == -1); ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
@@ -187,8 +191,9 @@ TEST_CASE("Bridge::switchBackend  -  onBackendChanged called exactly once on new
 
     // Query the new model instance's switchCount.
     std::atomic<int> count{-1};
-    handler.execute(SwitchCountAction{}).then([&](int val) { count.store(val); }).onError([](const std::exception_ptr&) {
-    });
+    handler.execute(SwitchCountAction{})
+        .then([&](int val) { count.store(val); })
+        .onError([](const std::exception_ptr&) {});
     for (int i = 0; i < 50 && count.load() == -1; ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
@@ -211,8 +216,9 @@ TEST_CASE("Bridge::switchBackend  -  onBackendChanged called exactly once per sw
     // Each switch creates a fresh model instance. The LAST instance receives
     // onBackendChanged() exactly once (from the second switch).
     std::atomic<int> count{-1};
-    handler.execute(SwitchCountAction{}).then([&](int val) { count.store(val); }).onError([](const std::exception_ptr&) {
-    });
+    handler.execute(SwitchCountAction{})
+        .then([&](int val) { count.store(val); })
+        .onError([](const std::exception_ptr&) {});
     for (int i = 0; i < 50 && count.load() == -1; ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }

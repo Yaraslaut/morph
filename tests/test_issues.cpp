@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Tests covering issues found during codebase analysis.
 // Each section corresponds to a numbered issue in the analysis document.
 

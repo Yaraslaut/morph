@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #include <async_framework/offline_queue.hpp>
 #include <async_framework/sync_worker.hpp>
 #include <atomic>

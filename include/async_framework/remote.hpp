@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 #include <atomic>
 #include <functional>
@@ -13,20 +15,47 @@
 
 namespace morph {
 
-// NOTE: RemoteServer must be heap-allocated via std::make_shared — handle()
-// captures shared_from_this() to prevent use-after-free when the pool outlives
-// the server object.
+/// @brief Server-side message handler that owns model instances and dispatches actions.
+///
+/// `RemoteServer` receives pipe-delimited text messages (from a WebSocket, a
+/// simulated transport, or any other source) and executes the corresponding
+/// model operations via an `ActionDispatcher`.
+///
+/// @par Heap allocation requirement
+/// `RemoteServer` **must** be heap-allocated via `std::make_shared`. `handle()`
+/// captures `shared_from_this()` to prevent use-after-free when the worker pool
+/// outlives the server object.
+///
+/// @par Message protocol
+/// - `register|<typeId>` — creates a model instance; replies `ok|<modelId>`.
+/// - `deregister|<modelId>` — destroys the instance; replies `ok`.
+/// - `execute|<mid>|<modelTy>|<actionTy>|<body>` — dispatches an action; replies `ok|<result>`.
+/// - `execute|<callId>|<mid>|<modelTy>|<actionTy>|<body>` — same with a correlation id.
+/// - Any error replies with `err|<message>` or `err|<callId>|<message>`.
 class RemoteServer : public std::enable_shared_from_this<RemoteServer> {
 public:
+    /// @brief Constructs a server backed by @p workerPool.
+    ///
+    /// @param workerPool Pool used to process messages asynchronously.
+    /// @param dispatcher Action dispatcher; defaults to the process-level singleton.
+    /// @param registry   Model factory registry; defaults to the process-level singleton.
     explicit RemoteServer(IExecutor& workerPool, ActionDispatcher& dispatcher = defaultDispatcher(),
                           ModelRegistryFactory& registry = defaultRegistry())
         : _pool{workerPool}, _strand{workerPool}, _dispatcher{dispatcher}, _registry{registry} {}
 
+    /// @brief Asynchronously processes @p msg and calls @p reply with the response.
+    ///
+    /// The message is dispatched to the worker pool. @p reply is called exactly
+    /// once from the pool thread when processing completes.
+    ///
+    /// Thread-safe. Safe to call before the previous call's reply has been delivered.
+    ///
+    /// @param msg   Pipe-delimited protocol message.
+    /// @param reply Callback invoked with the response string.
     void handle(std::string msg, std::function<void(std::string)> reply) {
         auto self = shared_from_this();
-        _pool.post([self, msg = std::move(msg), reply = std::move(reply)]() mutable {
-            self->dispatchMessage(msg, reply);
-        });
+        _pool.post(
+            [self, msg = std::move(msg), reply = std::move(reply)]() mutable { self->dispatchMessage(msg, reply); });
     }
 
 private:
@@ -36,7 +65,9 @@ private:
         auto parts = split(msg, '|', 6);
         try {
             if (parts[0] == "register") {
-                if (parts.size() < 2) { throw std::runtime_error("register requires a typeId"); }
+                if (parts.size() < 2) {
+                    throw std::runtime_error("register requires a typeId");
+                }
                 auto holder = _registry.create(parts[1]);
                 ModelId mid{_nextId.fetch_add(1) + 1};
                 {
@@ -45,7 +76,9 @@ private:
                 }
                 reply("ok|" + std::to_string(mid.v));
             } else if (parts[0] == "deregister") {
-                if (parts.size() < 2) { throw std::runtime_error("deregister requires a modelId"); }
+                if (parts.size() < 2) {
+                    throw std::runtime_error("deregister requires a modelId");
+                }
                 ModelId mid{std::stoull(parts[1])};
                 std::lock_guard lock{_regMtx};
                 _models.erase(mid);
@@ -132,10 +165,27 @@ private:
     std::atomic<uint64_t> _nextId{0};
 };
 
+/// @brief `IBackend` adapter that routes all calls through a `RemoteServer` using a
+///        synchronous request-reply protocol.
+///
+/// Intended for testing and in-process simulation of remote execution. All
+/// `registerModel()`, `deregisterModel()`, and `execute()` calls are forwarded
+/// as protocol messages to the server; the calling thread blocks until the reply
+/// arrives via `std::promise`.
 class SimulatedRemoteBackend : public IBackend {
 public:
+    /// @brief Constructs the backend targeting @p server.
+    /// @param server The `RemoteServer` instance to forward calls to.
     explicit SimulatedRemoteBackend(RemoteServer& server) : _server{server} {}
 
+    /// @brief Registers the model type on the server and returns its assigned id.
+    ///
+    /// Blocks until the server replies. The @p factory argument is ignored —
+    /// model construction is delegated to the server's `ModelRegistryFactory`.
+    ///
+    /// @param typeId String type-id sent in the `register` message.
+    /// @return `ModelId` assigned by the server.
+    /// @throws std::runtime_error if the server replies with an error.
     ModelId registerModel(const std::string& typeId, std::function<std::unique_ptr<IModelHolder>()>) override {
         std::promise<ModelId> prom;
         auto fut = prom.get_future();
@@ -148,12 +198,25 @@ public:
         });
         return fut.get();
     }
+
+    /// @brief Deregisters the model on the server. Blocks until the reply arrives.
+    /// @param mid Id of the model to deregister.
     void deregisterModel(ModelId mid) override {
         std::promise<void> prom;
         auto fut = prom.get_future();
         _server.handle("deregister|" + std::to_string(mid.v), [&prom](const std::string&) { prom.set_value(); });
         fut.get();
     }
+
+    /// @brief Serialises the action, sends it to the server, and returns a `Completion`.
+    ///
+    /// The `Completion` resolves when the server's reply is received and
+    /// deserialized. Callbacks are posted via @p cbExec.
+    ///
+    /// @param mid    Target model id on the server.
+    /// @param call   Bundled action; `serializeAction` and `deserializeResult` are used.
+    /// @param cbExec Executor for delivering the completion callbacks.
+    /// @return Completion that resolves with the deserialized result or an error.
     Completion<std::shared_ptr<void>> execute(ModelId mid, ActionCall call, IExecutor* cbExec) override {
         auto state = std::make_shared<detail::CompletionState<std::shared_ptr<void>>>();
         Completion<std::shared_ptr<void>> comp{state, cbExec};
@@ -178,7 +241,8 @@ public:
         });
         return comp;
     }
-    // Models live in RemoteServer, not here — no local objects to notify.
+
+    /// @brief No-op — models live in `RemoteServer`, not locally.
     void notifyBackendChanged() override {}
 
 private:

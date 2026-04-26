@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #include <async_framework/backend.hpp>
 #include <async_framework/bridge.hpp>
 #include <async_framework/executor.hpp>
@@ -148,7 +150,9 @@ TEST_CASE("BridgeHandler destructor deregisters model cleanly", "[bridge]") {
     std::atomic<int> result{-1};
     {
         BridgeHandler<CounterModel> handler{bridge, &cbExec};
-        handler.execute(CounterAction{10}).then([&](int val) { result.store(val); }).onError([](const std::exception_ptr&) {});
+        handler.execute(CounterAction{10})
+            .then([&](int val) { result.store(val); })
+            .onError([](const std::exception_ptr&) {});
 
         for (int i = 0; i < 50 && result.load() == -1; ++i) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));

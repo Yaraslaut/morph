@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 #include <atomic>
 #include <chrono>
@@ -8,27 +10,53 @@
 
 namespace morph {
 
-// Config is declared outside NetworkMonitor so that its default member
-// initializers are fully parsed before any NetworkMonitor constructor
-// default argument that names Config{} is evaluated. Compilers (clang,
-// GCC) reject "Config cfg = Config{}" in a constructor default argument
-// when Config is a nested type whose own defaults are not yet complete.
+/// @brief Configuration for `NetworkMonitor`.
+///
+/// Declared outside `NetworkMonitor` so that its default member initialisers
+/// are fully parsed before any constructor default argument that names
+/// `Config{}` is evaluated. Compilers (clang, GCC) reject `Config cfg = Config{}`
+/// in a constructor default argument when `Config` is an incomplete nested type.
 struct NetworkMonitorConfig {
+    /// @brief Time between probe calls.
     std::chrono::milliseconds probeInterval = std::chrono::seconds{5};
-    int failureThreshold = 3;  // consecutive failures before going offline
-    int onlineThreshold = 1;   // consecutive successes before going online
+
+    /// @brief Consecutive failures required before going offline.
+    int failureThreshold = 3;
+
+    /// @brief Consecutive successes required before going online.
+    int onlineThreshold = 1;
 };
 
+/// @brief Background connectivity monitor that fires callbacks on state changes.
+///
+/// A dedicated thread calls the user-supplied probe function at regular intervals.
+/// The monitor starts in the *online* state and transitions to *offline* only after
+/// `failureThreshold` consecutive failures. It returns to *online* after
+/// `onlineThreshold` consecutive successes.
+///
+/// The monitor is non-copyable and non-movable. Destroy it to stop monitoring.
 class NetworkMonitor {
 public:
+    /// @brief Returns `true` when the network is reachable.
     using ProbeFunction = std::function<bool()>;
+
+    /// @brief Called on connectivity state change.
     using Callback = std::function<void()>;
+
+    /// @brief Alias for the configuration struct.
     using Config = NetworkMonitorConfig;
 
-    // Starts online (assumes connectivity until proven otherwise). The first
-    // failureThreshold probes must all fail before the monitor considers itself
-    // offline and fires onOffline. Callers that know the initial state is
-    // offline should use a probe that starts returning false immediately.
+    /// @brief Starts the monitor and launches the probe thread.
+    ///
+    /// The monitor starts in the online state. The first `failureThreshold`
+    /// consecutive probe failures must occur before `onOffline` is invoked.
+    /// Callers that know the initial state is offline should use a probe that
+    /// starts returning `false` immediately.
+    ///
+    /// @param probe     Callable that tests connectivity. Must not throw (exceptions are swallowed).
+    /// @param onOffline Called on the probe thread when the monitor goes offline.
+    /// @param onOnline  Called on the probe thread when the monitor comes back online.
+    /// @param cfg       Tuning parameters (interval, thresholds).
     NetworkMonitor(ProbeFunction probe, Callback onOffline, Callback onOnline, Config cfg = Config{})
         : _probe{std::move(probe)},
           _onOffline{std::move(onOffline)},
@@ -38,6 +66,11 @@ public:
           _stopped{false},
           _thread{[this] { run(); }} {}
 
+    /// @brief Stops the monitor and waits for the probe thread to exit.
+    ///
+    /// Calls `stop()` internally. The destructor spin-waits on `_runExited` to
+    /// handle the case where `stop()` was called from within a probe callback
+    /// (which would deadlock a `join()`).
     ~NetworkMonitor() {
         stop();
         // If stop() was called from within a probe callback (same thread as run()),
@@ -54,8 +87,18 @@ public:
     NetworkMonitor(NetworkMonitor&&) = delete;
     NetworkMonitor& operator=(NetworkMonitor&&) = delete;
 
+    /// @brief Returns `true` if the monitor currently considers the network reachable.
+    ///
+    /// Reads an atomic flag — safe to call from any thread at any time.
     [[nodiscard]] bool isOnline() const noexcept { return _online.load(); }
 
+    /// @brief Signals the probe thread to stop and, if possible, joins it.
+    ///
+    /// Idempotent — subsequent calls are no-ops. If called from inside the probe
+    /// thread (e.g. from a probe callback), the thread is detached instead of
+    /// joined to avoid a deadlock; the destructor then spin-waits for it to exit.
+    ///
+    /// Thread-safe.
     void stop() {
         {
             // _mtx provides the idempotency guard: only one caller sets _stopped

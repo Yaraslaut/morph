@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #include <async_framework/bridge.hpp>
 #include <async_framework/executor.hpp>
 #include <async_framework/registry.hpp>

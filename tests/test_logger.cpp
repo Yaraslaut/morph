@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #include <async_framework/logger.hpp>
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>

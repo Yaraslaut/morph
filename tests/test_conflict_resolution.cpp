@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Conflict-resolution integration tests.
 //
 // Core invariant tested: the framework fires onBackendChanged() on the model
@@ -145,7 +147,7 @@ TEST_CASE("ConflictResolution: no conflicts  -  all items markDone on switchBack
     queue.enqueue(R"({"amount":30})");
 
     auto binding = makeOrderBinding(
-        queue, [](const std::string&) { return false; },  // no conflicts
+        queue, [](const std::string&) { return false; },      // no conflicts
         [](const std::string& payload) { return payload; });  // resolver never called
 
     Bridge bridge{std::make_unique<LocalBackend>(pool1)};
@@ -222,8 +224,8 @@ TEST_CASE("ConflictResolution: framework fires onBackendChanged exactly once per
     SyncExec cbExec;
     InMemoryOfflineQueue queue;
 
-    auto binding =
-        makeOrderBinding(queue, [](const std::string&) { return false; }, [](const std::string& payload) { return payload; });
+    auto binding = makeOrderBinding(
+        queue, [](const std::string&) { return false; }, [](const std::string& payload) { return payload; });
 
     Bridge bridge{std::make_unique<LocalBackend>(pool1)};
     BridgeHandler<OrderModel> handler{bridge, &cbExec, binding};

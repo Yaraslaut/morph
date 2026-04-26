@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 #include <condition_variable>
 #include <cstdint>
@@ -11,26 +13,55 @@
 
 namespace morph {
 
+/// @brief Opaque identifier for a model instance inside a backend.
+///
+/// The value 0 is reserved and means "not bound". All non-zero values are
+/// assigned by the backend and are stable for the lifetime of the model.
 struct ModelId {
+    /// @brief Raw numeric id. Zero means unbound.
     uint64_t v{0};
-    bool operator==(const ModelId& other) const { return v == other.v; }
+
+    /// @brief Three-way comparison — enables `==`, `!=`, `<`, `<=`, `>`, `>=`.
+    auto operator<=>(const ModelId&) const = default;
 };
+
+/// @brief Hash functor so `ModelId` can be used as an `unordered_map` key.
 struct ModelIdHash {
+    /// @brief Returns the hash of @p mid.
     std::size_t operator()(ModelId mid) const noexcept { return std::hash<uint64_t>{}(mid.v); }
 };
 
+/// @brief Per-key serialising executor built on top of an arbitrary `IExecutor`.
+///
+/// Tasks posted with the same `ModelId` key are always executed in FIFO order
+/// with no overlap, even when the underlying executor is a thread pool. Tasks
+/// with different keys may run concurrently.
+///
+/// This removes the need for per-model mutexes: the model's `execute()` method
+/// is always called from exactly one task at a time.
 class StrandExecutor {
 public:
+    /// @brief Constructs the strand executor wrapping @p base.
+    /// @param base Underlying executor that actually runs the tasks.
     explicit StrandExecutor(IExecutor& base) : _base{&base} {}
 
-    // Waits for all in-flight lambdas to complete before destroying the map.
-    // Without this, a pool thread running scheduleNext can access _strands
-    // after it has been destroyed (TSan: data race on destructor vs erase).
+    /// @brief Blocks until all in-flight tasks have completed, then destroys the executor.
+    ///
+    /// Waits for all in-flight lambdas to complete before destroying the map.
+    /// Without this, a pool thread running scheduleNext can access _strands
+    /// after it has been destroyed (TSan: data race on destructor vs erase).
     ~StrandExecutor() {
         std::unique_lock lock{_mapMtx};
         _cv.wait(lock, [this] { return _inFlight == 0; });
     }
 
+    /// @brief Posts @p task to the strand associated with @p key.
+    ///
+    /// The task is guaranteed to run after all previously posted tasks for the
+    /// same key have completed. Tasks for different keys may interleave freely.
+    /// Thread-safe.
+    /// @param key  Model identifier that selects the strand.
+    /// @param task Callable to execute.
     void post(ModelId key, std::function<void()> task) {
         std::shared_ptr<Strand> strand;
         {
