@@ -46,12 +46,12 @@ The framework is header-only (C++23, namespace `morph`), depends on Glaze for JS
 | `task.hpp` | `detail::Task<T>` — coroutine primitive (internal only) |
 | `completion.hpp` | `detail::CompletionState<T>`, `Completion<T>` — public result handle |
 | `model.hpp` | `IModelHolder`, `ModelHolder<T>`, `ModelFactory` — type-erased model storage |
-| `registry.hpp` | `ActionDispatcher`, `ModelRegistryFactory`, `ModelTraits<M>`, `ActionTraits<A>`, registration macros |
+| `registry.hpp` | `ParseError`, `ActionDispatcher`, `ModelRegistryFactory`, `ModelTraits<M>`, `ActionTraits<A>`, `defaultDispatcher()`, `defaultRegistry()`, registration macros |
 | `backend.hpp` | `ActionCall`, `IBackend`, `LocalBackend` |
 | `remote.hpp` | `RemoteServer`, `SimulatedRemoteBackend` |
 | `bridge.hpp` | `HandlerBinding`, `Bridge`, `BridgeHandler<M>` |
-| `logger.hpp` | `LogLevel`, `Logger` (alias), `setLogger`, `setLogLevel`, level helpers |
-| `network_monitor.hpp` | `NetworkMonitor` — abstract probe thread, online/offline state machine, configurable thresholds |
+| `logger.hpp` | `LogLevel`, `Logger` (alias), `levelName`, `setLogger`, `setLogLevel`, `getLogLevel`, level helpers |
+| `network_monitor.hpp` | `NetworkMonitorConfig`, `NetworkMonitor` — background probe thread, online/offline state machine, configurable thresholds |
 | `offline_queue.hpp` | `IOfflineQueue`, `QueueItem`, `InMemoryOfflineQueue` — durable write queue abstraction |
 | `sync_worker.hpp` | `SyncWorker`, `SyncResult` — drains offline queue on reconnect via caller-supplied replay |
 
