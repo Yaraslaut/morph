@@ -1,3 +1,17 @@
+# ── Helper binaries for the process-separation tests ────────────────────────
+# qt_test_server / qt_test_client are spawned by the unit test as separate
+# processes so the WebSocket layer is exercised across a real OS boundary.
+
+add_executable(qt_test_server qt_test_server_main.cpp qt_test_models.hpp)
+target_link_libraries(qt_test_server PRIVATE async_framework_qt_impl)
+apply_warnings(qt_test_server)
+
+add_executable(qt_test_client qt_test_client_main.cpp qt_test_models.hpp)
+target_link_libraries(qt_test_client PRIVATE async_framework_qt_impl)
+apply_warnings(qt_test_client)
+
+# ── Catch2 tests ─────────────────────────────────────────────────────────────
+
 add_executable(async_framework_qt_tests
     test_qt_websocket.cpp
 )
@@ -5,14 +19,19 @@ add_executable(async_framework_qt_tests
 target_link_libraries(async_framework_qt_tests
     PRIVATE
         async_framework_qt_impl
-        Catch2::Catch2WithMain
+        Catch2::Catch2  # we provide our own main() to control QCoreApplication lifetime
 )
 
 set_target_properties(async_framework_qt_tests PROPERTIES AUTOMOC ON)
 apply_warnings(async_framework_qt_tests)
 
+# Make sure the helpers exist before the test binary tries to spawn them.
+add_dependencies(async_framework_qt_tests qt_test_server qt_test_client)
+
 target_compile_definitions(async_framework_qt_tests PRIVATE
     TESTS_CERTS_DIR="${CMAKE_SOURCE_DIR}/tests/certs"
+    QT_TEST_SERVER_BIN="$<TARGET_FILE:qt_test_server>"
+    QT_TEST_CLIENT_BIN="$<TARGET_FILE:qt_test_client>"
 )
 
 include(Catch)

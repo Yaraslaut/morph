@@ -66,6 +66,7 @@ public:
     /// @brief Qt slot called when a client disconnects.
     Q_SLOT void onDisconnected();
 
+private:
     RemoteServer& _server;
     quint16 _requestedPort;
     QWebSocketServer _wsServer;
